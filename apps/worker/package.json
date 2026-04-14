@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local --port 8787",
+    "db:smoke": "node ./scripts/db-smoke-check.mjs",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types"
   },

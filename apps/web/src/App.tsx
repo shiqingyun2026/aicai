@@ -16,7 +16,7 @@ export function App() {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Acai V1 Scaffold</p>
+          <p className="eyebrow">公开信息辅助筛选</p>
           <div className="brand-row">
             <span className="brand-mark">阿财</span>
             <span className="brand-sub">A 股候选筛选与研读辅助</span>
@@ -44,4 +44,3 @@ export function App() {
     </div>
   );
 }
-

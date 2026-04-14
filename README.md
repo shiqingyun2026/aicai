@@ -37,6 +37,7 @@ supabase/   数据库 migration
 - `apps/worker/.dev.vars.example` 提供 Worker 本地环境变量示例
 - 当前 `/api/v1/analyze` 已接入本地规则判断、分轮编排骨架和三张分析表写库入口
 - 如果未配置 `SUPABASE_CONNECTION_STRING` 或 Hyperdrive 绑定，Worker 会跳过数据库写入，仅保留接口响应
+- 配置好 `SUPABASE_CONNECTION_STRING` 后，可执行 `npm run db:smoke --workspace @acai/worker` 验证 migration 与四张分析表写入链路
 
 ## 下一步建议
 

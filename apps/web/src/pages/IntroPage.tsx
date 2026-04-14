@@ -4,7 +4,7 @@ export function IntroPage() {
   return (
     <section className="hero-grid">
       <div className="hero-copy card">
-        <p className="eyebrow">项目基线</p>
+        <p className="eyebrow">阿财 V1</p>
         <h1>先定约束，再做筛选。</h1>
         <p className="lead">
           阿财不是荐股工具，它基于公开信息帮助用户缩窄研读方向。V1
@@ -15,7 +15,7 @@ export function IntroPage() {
             开始填写条件
           </Link>
           <Link className="secondary-button" to="/result">
-            查看结果壳层
+            查看结果页
           </Link>
         </div>
       </div>
