@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "acai-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-14",
+  "compatibility_flags": ["nodejs_compat"],
+  // Add your Hyperdrive binding after creating it in Cloudflare:
+  // "hyperdrive": [
+  //   {
+  //     "binding": "HYPERDRIVE",
+  //     "id": "<your-hyperdrive-id>"
+  //   }
+  // ],
+  "observability": {
+    "enabled": true
+  }
+}

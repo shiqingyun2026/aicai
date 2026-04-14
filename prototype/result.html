@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>阿财 · 结果页原型</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="result">
+    <header class="topbar">
+      <a class="brand-lockup" href="./index.html">
+        <span class="brand-mark">阿财</span>
+        <span class="brand-sub">选股条件整理原型</span>
+      </a>
+      <div class="topbar-meta">
+        <div class="flow-indicator" aria-label="当前流程">
+          <span class="flow-step is-done">介绍</span>
+          <span class="flow-step is-done">条件</span>
+          <span class="flow-step is-current">结果</span>
+        </div>
+        <p class="topnote">第 3 步 / 查看结果</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="screen screen-result">
+        <div class="screen-shell result-shell">
+          <div class="result-lead">
+            <div class="result-status">
+              <span class="status-badge">结果状态：已有候选</span>
+            </div>
+          </div>
+
+          <div class="result-grid">
+            <div class="result-main">
+              <section class="summary-surface">
+                <div class="summary-mascot" aria-hidden="true">
+                  <img src="../../Downloads/橘猫品牌吉祥物设计.png" alt="" />
+                </div>
+                <div class="summary-copy">
+                  <h3>这一次，阿财先整理出了 2 个可继续研读的方向。</h3>
+                  <p>
+                    你的条件更偏向中等波动、偏稳定现金流与产业位置清楚的标的，因此结果页不做热闹的营销感，而是把理由、疑点和证据分开摆清楚。
+                  </p>
+                </div>
+              </section>
+
+              <section class="condition-overview" aria-labelledby="condition-title">
+                <div class="section-line">
+                  <h3 id="condition-title">本次已选条件</h3>
+                </div>
+                <div class="condition-grid">
+                  <div>
+                    <span>预算</span>
+                    <strong id="summary-budget">50,000 元</strong>
+                  </div>
+                  <div>
+                    <span>目标收益参考</span>
+                    <strong id="summary-target-return">12%</strong>
+                  </div>
+                  <div>
+                    <span>风险承受能力</span>
+                    <strong id="summary-risk-tolerance">可接受最大回撤 10%</strong>
+                  </div>
+                  <div>
+                    <span>投资周期</span>
+                    <strong id="summary-investment-cycle">一年</strong>
+                  </div>
+                  <div>
+                    <span>高波动接受度</span>
+                    <strong id="summary-volatility-acceptance">尽量不接受</strong>
+                  </div>
+                  <div>
+                    <span>风格偏好</span>
+                    <strong id="summary-style-preference">红利</strong>
+                  </div>
+                </div>
+                <div class="selected-tags selected-tags-quiet" id="result-directions"></div>
+              </section>
+
+              <section class="candidate-list" aria-labelledby="candidate-title">
+                <div class="section-line">
+                  <h3 id="candidate-title">候选方向示意</h3>
+                </div>
+
+                <article class="candidate-module">
+                  <div class="candidate-head candidate-head-structured">
+                    <div>
+                      <p class="candidate-index">候选一</p>
+                      <h4>美的集团</h4>
+                      <div class="stock-meta">
+                        <span>股票代码 000333</span>
+                        <span>所属行业 家电</span>
+                      </div>
+                    </div>
+                    <div class="confidence-box">
+                      <span>该股置信度</span>
+                      <strong>78 / 100</strong>
+                    </div>
+                  </div>
+                  <div class="candidate-details">
+                    <section>
+                      <h5>入选原因</h5>
+                      <p>红利偏好、一年周期和尽量不接受高波动这三项条件，与它更稳定的经营特征有较高重合。</p>
+                    </section>
+                    <section>
+                      <h5>核心依据摘要</h5>
+                      <p>公开年报可见较强现金流与分红连续性，业务结构也比高主题方向更容易交叉验证。</p>
+                    </section>
+                    <section>
+                      <h5>主要风险</h5>
+                      <p>若出口节奏放缓或原材料波动扩大，利润弹性会被压缩，稳定性假设需要重新评估。</p>
+                    </section>
+                    <section>
+                      <h5>不确定性说明</h5>
+                      <p>当前仅基于公开信息做初筛，仍需继续核对渠道库存、海外需求与公司后续指引。</p>
+                    </section>
+                  </div>
+                  <div class="stock-evidence">
+                    <div class="stock-evidence-head">
+                      <span>该股主要依据来源</span>
+                      <strong>巨潮资讯、公司公告、行业公开研究</strong>
+                    </div>
+                    <article class="evidence-item evidence-item-stock">
+                      <button type="button" class="evidence-toggle" aria-expanded="false">
+                        展开美的集团的来源证据
+                      </button>
+                      <div class="evidence-content evidence-grid">
+                        <div class="source-card">
+                          <span class="source-level">一级来源 · 巨潮资讯</span>
+                          <strong>2025 年年度报告</strong>
+                          <p>用于确认收入结构、经营现金流与近年分红延续性。</p>
+                          <span class="source-date">2026-03-29</span>
+                        </div>
+                        <div class="source-card">
+                          <span class="source-level">一级来源 · 公司公告</span>
+                          <strong>利润分配方案公告</strong>
+                          <p>用于核对分红口径是否稳定，以及与红利偏好的贴合程度。</p>
+                          <span class="source-date">2026-03-30</span>
+                        </div>
+                        <div class="source-card">
+                          <span class="source-level">二级来源 · 行业公开研究</span>
+                          <strong>家电出口与内需跟踪</strong>
+                          <p>用于补足行业景气与需求弹性，但不单独决定候选结论。</p>
+                          <span class="source-date">2026-04-06</span>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </article>
+
+                <article class="candidate-module">
+                  <div class="candidate-head candidate-head-structured">
+                    <div>
+                      <p class="candidate-index">候选二</p>
+                      <h4>长江电力</h4>
+                      <div class="stock-meta">
+                        <span>股票代码 600900</span>
+                        <span>所属行业 公用事业</span>
+                      </div>
+                    </div>
+                    <div class="confidence-box">
+                      <span>该股置信度</span>
+                      <strong>71 / 100</strong>
+                    </div>
+                  </div>
+                  <div class="candidate-details">
+                    <section>
+                      <h5>入选原因</h5>
+                      <p>它更接近“稳、可验证、不过分追热点”的筛选方向，能作为低波动风格的对照候选。</p>
+                    </section>
+                    <section>
+                      <h5>核心依据摘要</h5>
+                      <p>分红属性、防御性与公开披露完整度较高，更容易判断条件是否真正匹配。</p>
+                    </section>
+                    <section>
+                      <h5>主要风险</h5>
+                      <p>若你的收益参考继续提高，这类方向可能显得偏保守，预期会开始与目标错位。</p>
+                    </section>
+                    <section>
+                      <h5>不确定性说明</h5>
+                      <p>仍需继续确认政策变化、资本开支节奏和外部水文等变量对未来表现的影响。</p>
+                    </section>
+                  </div>
+                  <div class="stock-evidence">
+                    <div class="stock-evidence-head">
+                      <span>该股主要依据来源</span>
+                      <strong>公司公告、年度报告、行业政策信息</strong>
+                    </div>
+                    <article class="evidence-item evidence-item-stock">
+                      <button type="button" class="evidence-toggle" aria-expanded="false">
+                        展开长江电力的来源证据
+                      </button>
+                      <div class="evidence-content evidence-grid">
+                        <div class="source-card">
+                          <span class="source-level">一级来源 · 巨潮资讯</span>
+                          <strong>2025 年年度报告</strong>
+                          <p>用于确认经营现金流、分红历史和资产运营稳定性。</p>
+                          <span class="source-date">2026-03-28</span>
+                        </div>
+                        <div class="source-card">
+                          <span class="source-level">一级来源 · 公司公告</span>
+                          <strong>分红相关公告</strong>
+                          <p>用于核对近年的分红政策与投资者回报口径。</p>
+                          <span class="source-date">2026-03-31</span>
+                        </div>
+                        <div class="source-card">
+                          <span class="source-level">二级来源 · 政策公开信息</span>
+                          <strong>电力行业政策梳理</strong>
+                          <p>用于补足外部环境判断，但不替代公司层面的硬证据。</p>
+                          <span class="source-date">2026-04-05</span>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </article>
+              </section>
+              <p class="result-note">
+                风险提示：结果页只展示公开信息匹配后的“可继续研究对象”，不是收益承诺，也不代表未来表现判断。
+              </p>
+              <div class="result-actions">
+                <a class="button button-primary button-wide" href="./form.html">再输入一次</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

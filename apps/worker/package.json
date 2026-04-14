@@ -1,0 +1,21 @@
+{
+  "name": "@acai/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8787",
+    "typecheck": "tsc --noEmit",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "@acai/shared": "file:../../packages/shared",
+    "pg": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/pg": "latest",
+    "typescript": "latest",
+    "wrangler": "latest"
+  }
+}

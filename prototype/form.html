@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>阿财 · 表单页原型</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="form">
+    <header class="topbar">
+      <a class="brand-lockup" href="./index.html">
+        <span class="brand-mark">阿财</span>
+        <span class="brand-sub">选股条件整理原型</span>
+      </a>
+      <div class="topbar-meta">
+        <div class="flow-indicator" aria-label="当前流程">
+          <span class="flow-step is-done">介绍</span>
+          <span class="flow-step is-current">条件</span>
+          <span class="flow-step">结果</span>
+        </div>
+        <p class="topnote">第 2 步 / 填写条件</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="screen screen-form">
+        <div class="screen-shell">
+          <section class="form-surface" aria-labelledby="form-title">
+            <div class="form-intro">
+              <div class="form-intro-head">
+                <img
+                  class="form-intro-mascot"
+                  src="../../Downloads/橘猫品牌吉祥物设计 (1).png"
+                  alt="阿财橘猫吉祥物"
+                />
+                <h3 id="form-title">填写你的筛选条件</h3>
+              </div>
+              <p>
+                能选就不让你写。预算和目标收益参考保留数字输入，其余尽量使用清楚的中文选择项。
+              </p>
+            </div>
+
+            <div class="form-grid">
+              <label class="field field-compact">
+                <span class="field-label">预算</span>
+                <div class="input-shell">
+                  <input id="budget" type="text" value="50000" aria-label="预算" />
+                  <span class="input-suffix">元</span>
+                </div>
+              </label>
+
+              <label class="field field-compact">
+                <span class="field-label">目标收益参考</span>
+                <div class="input-shell">
+                  <input id="target-return" type="text" value="12" aria-label="目标收益参考" />
+                  <span class="input-suffix">%</span>
+                </div>
+              </label>
+
+              <div class="field field-wide" data-field="risk_tolerance">
+                <span class="field-label">风险承受能力</span>
+                <div class="segmented-group">
+                  <button type="button" class="segmented-option">可接受最大回撤 5%</button>
+                  <button type="button" class="segmented-option is-selected">可接受最大回撤 10%</button>
+                  <button type="button" class="segmented-option">可接受最大回撤 20%</button>
+                  <button type="button" class="segmented-option">可接受最大回撤 50%</button>
+                </div>
+              </div>
+
+              <div class="field field-wide" data-field="investment_cycle">
+                <span class="field-label">投资周期</span>
+                <div class="segmented-group">
+                  <button type="button" class="segmented-option">一周</button>
+                  <button type="button" class="segmented-option">一个月</button>
+                  <button type="button" class="segmented-option">一个季度</button>
+                  <button type="button" class="segmented-option">半年</button>
+                  <button type="button" class="segmented-option is-selected">一年</button>
+                  <button type="button" class="segmented-option">2 年</button>
+                  <button type="button" class="segmented-option">3 年以上</button>
+                </div>
+              </div>
+
+              <div class="field" data-field="volatility_acceptance">
+                <span class="field-label">是否接受高波动</span>
+                <div class="segmented-group two-up">
+                  <button type="button" class="segmented-option">接受</button>
+                  <button type="button" class="segmented-option is-selected">尽量不接受</button>
+                </div>
+              </div>
+
+              <div class="field" data-field="style_preference">
+                <span class="field-label">风格偏好</span>
+                <div class="segmented-group">
+                  <button type="button" class="segmented-option">价值投资</button>
+                  <button type="button" class="segmented-option">成长性</button>
+                  <button type="button" class="segmented-option is-selected">红利</button>
+                  <button type="button" class="segmented-option">龙头</button>
+                  <button type="button" class="segmented-option">题材</button>
+                  <button type="button" class="segmented-option">均衡</button>
+                </div>
+              </div>
+
+              <div class="field field-wide field-search">
+                <div class="field-header">
+                  <span class="field-label">方向偏好</span>
+                  <span class="field-meta">支持搜索后选择</span>
+                </div>
+                <label class="search-shell">
+                  <span>搜一搜方向</span>
+                  <input type="text" value="高股" aria-label="搜索方向偏好" />
+                </label>
+                <div class="pick-pills" role="list" aria-label="方向偏好候选">
+                  <button type="button" class="pick-pill is-active" data-value="高股息">高股息</button>
+                  <button type="button" class="pick-pill is-active" data-value="家电">家电</button>
+                  <button type="button" class="pick-pill" data-value="电网设备">电网设备</button>
+                  <button type="button" class="pick-pill" data-value="消费龙头">消费龙头</button>
+                  <button type="button" class="pick-pill" data-value="央国企">央国企</button>
+                  <button type="button" class="pick-pill is-active" data-value="出海制造">出海制造</button>
+                  <button type="button" class="pick-pill" data-value="医药">医药</button>
+                  <button type="button" class="pick-pill" data-value="半导体">半导体</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="selection-strip">
+              <div>
+                <p class="selection-label">已选方向</p>
+                <div class="selected-tags" id="selected-directions" aria-live="polite"></div>
+              </div>
+              <div class="selection-actions">
+                <button class="button button-primary" type="button" id="go-result">
+                  开始分析
+                </button>
+                <a class="button button-ghost" href="./index.html">返回介绍页</a>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

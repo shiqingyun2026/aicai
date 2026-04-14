@@ -1,0 +1,8 @@
+# 本地开发可直接使用 Supabase 连接串
+# aicai project ref: uxdrlytwgfyahmggvmah
+# pooler host template:
+# postgresql://postgres.uxdrlytwgfyahmggvmah:<DB_PASSWORD>@aws-1-us-east-2.pooler.supabase.com:5432/postgres
+OPENAI_API_KEY=
+SUPABASE_CONNECTION_STRING=
+HYPERDRIVE_ID=
+SOURCE_CHANNEL=web
