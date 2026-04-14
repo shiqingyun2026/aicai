@@ -1,7 +1,6 @@
 import type { AnalyzeRequest } from "@acai/shared";
 import { makeUuid } from "../lib/ids";
 import { responseRounds } from "./rounds";
-import { mockResponsesProvider } from "./providers/mockProvider";
 import type { ResponsesPipelineResult, ResponsesProvider, RoundTraceEntry } from "./types";
 
 function buildCandidatesFromRound(roundEntry: RoundTraceEntry): ResponsesPipelineResult["candidates"] {
@@ -49,7 +48,7 @@ function getHighestSourceLevel(candidates: ResponsesPipelineResult["candidates"]
 
 export async function runResponsesPipeline(
   request: AnalyzeRequest,
-  provider: ResponsesProvider = mockResponsesProvider,
+  provider: ResponsesProvider,
 ): Promise<ResponsesPipelineResult> {
   const roundTrace: RoundTraceEntry[] = [];
 
@@ -135,4 +134,3 @@ export async function runResponsesPipeline(
     roundTrace: { rounds: roundTrace },
   };
 }
-

@@ -36,19 +36,20 @@
 - `/health` 和 `/api/v1/analyze` 已落地
 - Worker 已接入请求校验、请求规范化、规则引擎、Responses Pipeline 骨架、响应组装、可选写库
 - Responses Pipeline 的 3 段 schema 和 round orchestrator 已落地
-- 当前 provider 仍是 mock，不是 OpenAI Responses API
-- 数据库存储代码已接线，但 migration 和真实连接尚未验证
-- 前端三页结构、表单提交流程、结果页结构渲染已落地
+- OpenAI Responses provider、分阶段 prompt 模板和来源域名 allowlist 已接线，未完成真实 `OPENAI_API_KEY` 联调
+- 数据库存储代码已通过真实 Supabase smoke 验证
+- 前端三页结构、表单提交流程、结果页差异化状态展示和证据展开交互已落地
 - `npm run typecheck` 已通过
 - `npm run build:web` 已通过
+- `npm run db:smoke --workspace @acai/worker` 已通过
 
 当前最关键的未完成项：
 
-- 真实 OpenAI Responses provider
-- 真实 `web_search` 检索与来源门槛
-- Supabase / Hyperdrive 真实联通验证
+- 真实 OpenAI Responses API + `web_search` 联调验证
+- 证据门槛、去重与 gatekeeper
+- Hyperdrive 真实绑定
 - 失败路径写库
-- 前端字段级错误、证据交互、正式产品化打磨
+- 前端即时校验、异常页、正式产品化打磨
 - 自动化测试
 
 ## 3. 总体阶段进度
@@ -90,10 +91,13 @@
 - orchestrator
 - round trace
 - mock provider
+- OpenAI Responses provider 接线
+- prompt 模板与 JSON Schema 请求组织
+- 来源等级到域名 allowlist 第一版
 
 未完成：
 
-- 真实 OpenAI Responses API
+- 真实 `OPENAI_API_KEY` 联调验证
 - 真正的来源等级过滤和域名策略
 - 证据去重与 gatekeeper
 - Round 4 背景补充专门逻辑
@@ -107,13 +111,16 @@
 - 三页路由
 - 表单提交
 - 结果页结构渲染
+- 字段级错误展示
+- 方向偏好多选交互
+- 结果页状态差异化渲染
+- 结果页证据展开交互
 - Worker 基础联调
 
 未完成：
 
-- 字段级错误
+- 表单即时校验
 - 更完整异常态
-- 结果页交互细化
 - 正式视觉与文案
 
 ### 3.6 Phase 5：测试、观测与上线准备
@@ -183,19 +190,19 @@
 | `RESP-09` | 建立来源等级过滤 | 进行中 | 当前只有 `allowedSourceLevels` 结构传递，没有真实域名策略与级别映射校验 |
 | `RESP-10` | 建立证据去重与标准化 | 未开始 | 待实现 |
 | `RESP-11` | 建立 Evidence Gatekeeper | 未开始 | 待实现 |
-| `RESP-12` | 建立 Prompt 模板和调用参数组织 | 未开始 | 当前未接真实 Responses API |
-| `RESP-13` | 接入真实 OpenAI Responses provider | 未开始 | 当前默认仍是 mock provider |
+| `RESP-12` | 建立 Prompt 模板和调用参数组织 | 进行中 | 已补三阶段 prompt 模板、JSON Schema 请求组织与来源域名过滤参数 |
+| `RESP-13` | 接入真实 OpenAI Responses provider | 进行中 | 已完成 provider 接线与 mock 回退，待真实 `OPENAI_API_KEY` 联调验证 |
 
 ## 4.5 数据库与写库链路
 
 | 编号 | 任务 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| `DATA-01` | 校验 Supabase migration 可执行性 | 进行中 | 已补 `db:smoke` 脚本，待填真实连接串后执行验证 |
+| `DATA-01` | 校验 Supabase migration 可执行性 | 已完成 | 已通过 `db:smoke` 在真实 Supabase 上完成 migration 执行验证 |
 | `DATA-02` | 配置 Supabase 连接方式 | 进行中 | 已有 `SUPABASE_CONNECTION_STRING` 环境位和连接解析逻辑 |
 | `DATA-03` | 配置 Hyperdrive | 进行中 | `wrangler.jsonc` 已预留注释配置，但未完成真实绑定 |
-| `DATA-04` | 建立 `analysis_records` 写入 | 进行中 | 已有插入代码并接在主流程，未做真实库验证 |
-| `DATA-05` | 建立 `analysis_candidates` 写入 | 进行中 | 已有插入代码并接在主流程，未做真实库验证 |
-| `DATA-06` | 建立 `candidate_evidence` 写入 | 进行中 | 已有插入代码并接在主流程，未做真实库验证 |
+| `DATA-04` | 建立 `analysis_records` 写入 | 已完成 | 已通过真实库 smoke 验证记录写入 |
+| `DATA-05` | 建立 `analysis_candidates` 写入 | 已完成 | 已通过真实库 smoke 验证候选写入 |
+| `DATA-06` | 建立 `candidate_evidence` 写入 | 已完成 | 已通过真实库 smoke 验证证据写入 |
 | `DATA-07` | 建立失败路径记录 | 未开始 | 当前仅成功路径入库 |
 | `DATA-08` | 建立请求与响应回放字段映射 | 已完成 | `normalized_request_json`、`rule_results_json`、`round_trace_json`、`final_response_json` 已接通 |
 
@@ -236,9 +243,9 @@
 | `INTEG-01` | 前端接入真实 Worker 地址 | 已完成 | 已通过 `VITE_API_BASE_URL` 对接 |
 | `INTEG-02` | 前端提交真实请求并消费响应 | 已完成 | 基础流程已打通 |
 | `INTEG-03` | 联调规则拦截场景 | 进行中 | 可人工触发，但尚未沉淀标准联调样例 |
-| `INTEG-04` | 联调 `NO_CLEAR_CANDIDATES` 场景 | 进行中 | 当前依赖 mock provider |
-| `INTEG-05` | 联调 `HAS_CANDIDATES` 场景 | 进行中 | 当前依赖 mock provider |
-| `INTEG-06` | 联调写库成功路径 | 进行中 | 代码已接线，但未验证真实数据库 |
+| `INTEG-04` | 联调 `NO_CLEAR_CANDIDATES` 场景 | 进行中 | 当前仍以 mock provider 为主，待真实 OpenAI 联调后复核 |
+| `INTEG-05` | 联调 `HAS_CANDIDATES` 场景 | 进行中 | 当前仍以 mock provider 为主，待真实 OpenAI 联调后复核 |
+| `INTEG-06` | 联调写库成功路径 | 进行中 | 已通过真实库 smoke 验证写入链路，待走通 Worker 接口成功路径 |
 | `INTEG-07` | 联调上游失败和超时路径 | 未开始 | 真实模型和真实超时处理尚未接入 |
 
 ## 4.8 测试、观测与发布准备
@@ -257,14 +264,14 @@
 
 如果接下来只做最有价值的事情，建议按下面顺序推进：
 
-1. `DATA-01`、`DATA-04`、`INTEG-06`
-   - 先把 migration 和真实写库跑通
-2. `RESP-13`、`RESP-12`
-   - 替换真实 OpenAI Responses provider
-3. `RESP-09`、`RESP-10`、`RESP-11`
+1. `RESP-13`、`RESP-12`
+   - 先用真实 `OPENAI_API_KEY` 跑通 OpenAI Responses API + `web_search`
+2. `RESP-09`、`RESP-10`、`RESP-11`
    - 完成来源等级、证据去重、gatekeeper
-4. `FE-13`、`FE-19`、`FE-22`、`FE-25`
-   - 把前端从开发态壳层推到可演示版本
+3. `DATA-07`、`INTEG-06`
+   - 补失败路径写库，并走通 Worker 接口成功路径验证
+4. `FE-08`、`FE-09`、`FE-23`、`FE-24`
+   - 补表单即时校验、异常页、文案和移动端验收
 5. `QA-01` ~ `QA-05`
    - 补最基础自动化测试
 

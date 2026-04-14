@@ -6,6 +6,8 @@ type HyperdriveBinding = {
 
 export type WorkerEnv = {
   HYPERDRIVE?: HyperdriveBinding;
+  OPENAI_API_KEY?: string;
+  OPENAI_RESPONSES_MODEL?: string;
   SUPABASE_CONNECTION_STRING?: string;
   SOURCE_CHANNEL?: string;
 };

@@ -9,6 +9,7 @@ import { composeAnalyzeResponse } from "./analysis/resultComposer";
 import { createPreflightResponse, jsonResponse } from "./lib/http";
 import { makeId, makeUuid } from "./lib/ids";
 import { runResponsesPipeline } from "./responses/orchestrator";
+import { resolveResponsesProvider } from "./responses/providers";
 import { evaluateRules } from "./rules/evaluate";
 import { persistAnalysisBundle } from "./storage/analysisRecords";
 import { hasDatabaseBinding } from "./storage/client";
@@ -83,9 +84,27 @@ async function handleAnalyze(request: Request, env: WorkerEnv): Promise<Response
 
   const normalizedRequest = normalizeAnalyzeRequest(validated.data);
   const ruleResult = evaluateRules(normalizedRequest);
-  const pipelineResult = ruleResult.rules_passed
-    ? await runResponsesPipeline(normalizedRequest)
-    : undefined;
+  let pipelineResult;
+
+  if (ruleResult.rules_passed) {
+    try {
+      pipelineResult = await runResponsesPipeline(
+        normalizedRequest,
+        resolveResponsesProvider(env),
+      );
+    } catch (error) {
+      console.error("responses_pipeline_failed", error);
+      return jsonResponse(
+        buildErrorPayload(requestId, "UPSTREAM_FAILURE", "上游模型调用失败", [
+          {
+            field: "responses_pipeline",
+            reason: error instanceof Error ? error.message : "responses_pipeline_failed",
+          },
+        ]),
+        502,
+      );
+    }
+  }
   const durationMs = Date.now() - startedAt;
   const response = composeAnalyzeResponse({
     analysisId,

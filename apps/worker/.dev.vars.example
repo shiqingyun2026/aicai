@@ -4,6 +4,7 @@
 # postgresql://postgres.uxdrlytwgfyahmggvmah:<DB_PASSWORD>@aws-1-us-east-2.pooler.supabase.com:5432/postgres
 # 配置完成后可运行: npm run db:smoke --workspace @acai/worker
 OPENAI_API_KEY=
+OPENAI_RESPONSES_MODEL=gpt-5
 SUPABASE_CONNECTION_STRING=
 HYPERDRIVE_ID=
 SOURCE_CHANNEL=web

@@ -123,7 +123,7 @@
 
 ### 5.4 Responses Pipeline 现状
 
-这里是“已经开始，但还没接真实模型”的状态。
+这里是“真实 provider 已接线，但还没完成真实 API 联调”的状态。
 
 已落地内容：
 
@@ -134,12 +134,14 @@
 - 轮次 trace 结构
 - Orchestrator
 - mock provider
+- OpenAI Responses provider 接线与 provider 选择层
+- 分阶段 prompt 模板
+- 基于来源等级的域名 allowlist 映射
 - 根据证据结果决定升级轮次或收敛结果
 
 未落地内容：
 
-- 真实 OpenAI Responses API provider
-- `web_search` 实际调用
+- 用真实 `OPENAI_API_KEY` 验证 OpenAI Responses API 调用链路
 - 来源域名白名单与等级过滤的真实实现
 - 证据去重与 gatekeeper
 - Round 4 的“仅补背景不参与核心结论”专门逻辑
@@ -153,11 +155,11 @@
 - 已支持从 `SUPABASE_CONNECTION_STRING` 或 `HYPERDRIVE.connectionString` 解析连接串
 - 写库入口 `persistAnalysisBundle` 已接在主流程里
 - 已补 `npm run db:smoke --workspace @acai/worker` 本地 smoke 脚本
+- 已用真实 Supabase 连接串跑通 migration 与事务内 probe write 验证
 - 成功路径下会写入 4 张主表
 
 但要注意：
 
-- migration 还没有真实库执行验证记录
 - Hyperdrive 只是预留配置，还没完成 Cloudflare 侧绑定
 - 当前没有失败路径写库
 
@@ -195,13 +197,15 @@
 
 - `npm run typecheck`
 - `npm run build:web`
+- `npm run db:smoke --workspace @acai/worker`
 
 说明：
 
 - 当前可确认前端能构建
 - 当前可确认 TypeScript 检查通过
+- 当前可确认 Supabase migration 与 4 张分析表写入链路已完成真实库 smoke 验证
 - 尚未补充自动化测试
-- 尚未验证真实数据库和真实 OpenAI 调用链路
+- 尚未验证真实 OpenAI 调用链路
 
 ## 7. 当前开发阶段判断
 
@@ -222,22 +226,25 @@
 
 ### 8.1 模型链路仍是假实现
 
-虽然 Responses Pipeline 骨架已经搭好，但目前默认 provider 仍是 mock。
+虽然 Responses Pipeline 已经补上真实 OpenAI provider 接线，但当前还没有用真实 `OPENAI_API_KEY` 跑过联调验证。
 
 这意味着：
 
-- 当前候选结果不来自真实联网检索
-- 来源等级控制只是结构化占位，不是生产可信实现
-- 当前更像“可联调骨架”，不是“可上线分析链路”
+- 当前默认仍可能回退到 mock provider
+- OpenAI `web_search` 实际调用还没有真实联调记录
+- 来源等级控制还是第一版 allowlist，不是生产可信实现
 
-### 8.2 数据库链路已接线但未验库
+### 8.2 数据库链路已接线并完成首轮真实验证
 
-写库代码已经存在，但缺少两类验证：
+写库代码已经完成首轮真实验证：
 
-- migration 实际执行验证
-- Worker 连 Supabase / Hyperdrive 的真实联通验证
+- migration 已执行验证
+- Worker 连 Supabase 的真实联通验证已完成
 
-当前已补 smoke 脚本，但本地仍缺 `SUPABASE_CONNECTION_STRING`，所以还没有完成真实库验证。
+但仍有这些边界未完成：
+
+- Hyperdrive 还没有完成 Cloudflare 侧绑定
+- 失败路径写库还没实现
 
 ### 8.3 前端仍在从开发态向可演示版本过渡
 
@@ -263,23 +270,20 @@
 
 建议按下面顺序继续，而不是同时散开做：
 
-1. 先验证数据库链路
-   - 执行 migration
-   - 用本地 Worker + Supabase 连接串验证 4 张表写入
-2. 再替换真实 Responses provider
-   - 把 mock provider 替换为 OpenAI Responses API provider
-   - 接入分阶段 Structured Outputs
-   - 接入 `web_search`
-3. 然后补证据与来源门槛
+1. 先验证真实 Responses provider
+   - 填入 `OPENAI_API_KEY`
+   - 用真实请求跑通 OpenAI Responses API + `web_search`
+   - 校验三段 Structured Outputs 都能稳定返回
+2. 然后补证据与来源门槛
    - 来源等级映射
    - 证据去重
    - gatekeeper
    - Round 4 背景补充边界
-4. 再补前端产品化
+3. 再补前端产品化
    - 继续打磨正式文案与移动端体验
    - 系统异常页与异常流转
    - 方向偏好多选交互优化
-5. 最后补测试和上线准备
+4. 最后补测试和上线准备
 
 ## 10. 接手时优先阅读的文件
 
@@ -301,10 +305,10 @@
 
 ## 11. 当前一句话结论
 
-当前项目已经从“文档阶段”进入“可联调工程骨架阶段”。
+当前项目已经从“可联调工程骨架阶段”推进到“数据库已验证、真实模型待联调阶段”。
 
-最适合的下一步不是继续抽象讨论，而是优先打通：
+最适合的下一步不是回到抽象讨论，而是优先打通：
 
-- 真实数据库验证
-- 真实 Responses provider
-- 证据门槛与测试
+- 真实 OpenAI Responses API 联调
+- 证据门槛与来源治理
+- 测试与异常路径
