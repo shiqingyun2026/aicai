@@ -40,10 +40,13 @@ supabase/   数据库 migration
 - 配置好 `SUPABASE_CONNECTION_STRING` 后，可执行 `npm run db:smoke --workspace @acai/worker` 验证 migration 与四张分析表写入链路
 - 做真实 OpenAI 联调时，在 `apps/worker/.dev.vars` 中填写 `OPENAI_API_KEY`，并将 `RESPONSES_PROVIDER=openai`
 - 做真实 Kimi 联调时，在 `apps/worker/.dev.vars` 中填写 `KIMI_API_KEY`，并将 `RESPONSES_PROVIDER=kimi`
+- 当前 Kimi 路径已切换为“Worker 显式调用 Formula web-search，再把 search_context 注入 `kimi-k2.5` 完成结构化输出”
+- Kimi 默认 Formula 为 `moonshot/web-search:latest`，如上游版本切换，可通过 `KIMI_WEB_SEARCH_FORMULA` 覆盖
+- Kimi 搜索阶段会尽量拼接 `site:` 约束到白名单域名，同时仍保留 Worker gatekeeper 做后置过滤
 
 ## 下一步建议
 
 1. 把 `packages/shared` 里的契约继续补齐为完整 Zod schema
 2. 验证 `supabase/migrations/20260413_230000_analysis_schema.sql`
-3. 基于真实 `OPENAI_API_KEY` 跑通 `web_search` 联调并沉淀冒烟样例
-4. 为分轮编排补充 schema 校验、上游异常处理和测试
+3. 基于真实 `KIMI_API_KEY` 跑通 `candidate_narrowing` 与完整 `/api/v1/analyze` 冒烟联调
+4. 为分轮编排补充自动化测试，并对真实搜索返回结构继续收紧映射规则

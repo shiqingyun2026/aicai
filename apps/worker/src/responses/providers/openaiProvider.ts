@@ -425,8 +425,8 @@ export function createOpenAIResponsesProvider(env: WorkerEnv): ResponsesProvider
       request,
       round,
       allowedSourceLevels,
-    }): Promise<CandidateNarrowingOutput> {
-      return parseStructuredResponse(
+    }) {
+      const output = await parseStructuredResponse(
         env,
         buildCandidateNarrowingPrompt(
           request,
@@ -438,6 +438,14 @@ export function createOpenAIResponsesProvider(env: WorkerEnv): ResponsesProvider
         CandidateNarrowingSchema,
         allowedSourceLevels,
       );
+
+      return {
+        output,
+        trace: {
+          provider: "openai" as const,
+          completion_model: env.OPENAI_RESPONSES_MODEL ?? DEFAULT_MODEL,
+        },
+      };
     },
 
     async runEvidenceVerification({
@@ -445,8 +453,8 @@ export function createOpenAIResponsesProvider(env: WorkerEnv): ResponsesProvider
       round,
       allowedSourceLevels,
       candidateNarrowing,
-    }): Promise<EvidenceVerificationOutput> {
-      return parseStructuredResponse(
+    }) {
+      const output = await parseStructuredResponse(
         env,
         buildEvidenceVerificationPrompt(
           request,
@@ -459,6 +467,14 @@ export function createOpenAIResponsesProvider(env: WorkerEnv): ResponsesProvider
         EvidenceVerificationSchema,
         allowedSourceLevels,
       );
+
+      return {
+        output,
+        trace: {
+          provider: "openai" as const,
+          completion_model: env.OPENAI_RESPONSES_MODEL ?? DEFAULT_MODEL,
+        },
+      };
     },
 
     async runStructuredAssessment({
@@ -467,8 +483,8 @@ export function createOpenAIResponsesProvider(env: WorkerEnv): ResponsesProvider
       allowedSourceLevels,
       candidateNarrowing,
       evidenceVerification,
-    }): Promise<StructuredAssessmentOutput> {
-      return parseStructuredResponse(
+    }) {
+      const output = await parseStructuredResponse(
         env,
         buildStructuredAssessmentPrompt(
           request,
@@ -482,6 +498,14 @@ export function createOpenAIResponsesProvider(env: WorkerEnv): ResponsesProvider
         StructuredAssessmentSchema,
         allowedSourceLevels,
       );
+
+      return {
+        output,
+        trace: {
+          provider: "openai" as const,
+          completion_model: env.OPENAI_RESPONSES_MODEL ?? DEFAULT_MODEL,
+        },
+      };
     },
   };
 }

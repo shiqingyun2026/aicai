@@ -4,7 +4,7 @@
 
 状态：执行中
 
-更新时间：2026-04-14
+更新时间：2026-04-15
 
 关联文档：
 
@@ -37,6 +37,7 @@
 - Worker 已接入请求校验、请求规范化、规则引擎、Responses Pipeline 骨架、响应组装、可选写库
 - Responses Pipeline 的 3 段 schema 和 round orchestrator 已落地
 - OpenAI Responses provider、分阶段 prompt 模板和来源域名 allowlist 已接线，未完成真实 `OPENAI_API_KEY` 联调
+- Kimi provider 已重构为显式搜索前置路径，未完成真实 `KIMI_API_KEY` 联调
 - 数据库存储代码已通过真实 Supabase smoke 验证
 - 前端三页结构、表单提交流程、结果页差异化状态展示和证据展开交互已落地
 - `npm run typecheck` 已通过
@@ -190,8 +191,9 @@
 | `RESP-09` | 建立来源等级过滤 | 进行中 | 已补域名白名单与来源等级的 Worker 后置校验，仍需结合真实 `web_search` 返回结果验证覆盖度 |
 | `RESP-10` | 建立证据去重与标准化 | 已完成 | 已在 Worker gatekeeper 中实现证据域名标准化、按链接去重和有效性过滤 |
 | `RESP-11` | 建立 Evidence Gatekeeper | 已完成 | 已在 orchestrator 中接入 Worker 后置仲裁，负责证据门槛、置信度匹配和候选放行/剔除 |
-| `RESP-12` | 建立 Prompt 模板和调用参数组织 | 进行中 | 已补三阶段 prompt 模板、JSON Schema 请求组织与来源域名过滤参数 |
+| `RESP-12` | 建立 Prompt 模板和调用参数组织 | 进行中 | 已补三阶段 prompt 模板、JSON Schema 请求组织、Kimi `search_context` 注入与来源域名过滤参数 |
 | `RESP-13` | 接入真实 OpenAI Responses provider | 进行中 | 已完成 provider 接线与 mock 回退，待真实 `OPENAI_API_KEY` 联调验证 |
+| `RESP-14` | 重构 Kimi 为显式搜索前置 | 进行中 | 代码已切换为 Worker 显式调用 Formula web-search，再用 `kimi-k2.5` 输出 JSON，待真实 `KIMI_API_KEY` 联调验证 |
 
 ## 4.5 数据库与写库链路
 

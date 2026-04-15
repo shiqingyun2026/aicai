@@ -7,8 +7,9 @@ import {
 } from "@acai/shared";
 import { z } from "zod";
 import type { WorkerEnv } from "../../storage/types";
-import { getAllowedDomainsForLevels } from "../sourcePolicy";
+import { getAllowedDomainsForLevels, inferSourceLevelForDomain } from "../sourcePolicy";
 import {
+  buildSearchContextBlock,
   buildCandidateNarrowingPrompt,
   buildEvidenceVerificationPrompt,
   buildStructuredAssessmentPrompt,
@@ -19,21 +20,26 @@ import {
   StructuredAssessmentSchema,
   type CandidateNarrowingOutput,
   type EvidenceVerificationOutput,
+  type ProviderStageResult,
   type ResponsesProvider,
+  type ResponseStageTrace,
+  type SearchContextItem,
   type StructuredAssessmentOutput,
 } from "../types";
 
 const DEFAULT_BASE_URL = "https://api.moonshot.cn/v1";
 const DEFAULT_MODEL = "kimi-k2.5";
-const OFFICIAL_TOOLS_URL = "https://api.moonshot.cn/v1/formulas/moonshot/web-search:latest/tools";
-const OFFICIAL_FIBERS_URL = "https://api.moonshot.cn/v1/formulas/moonshot/web-search:latest/fibers";
+const DEFAULT_WEB_SEARCH_FORMULA = "moonshot/web-search:latest";
+const WEB_SEARCH_TOOL_NAME = "web_search";
 const TOOLS_TIMEOUT_MS = 15_000;
 const COMPLETION_TIMEOUT_MS = 90_000;
 const FIBER_TIMEOUT_MS = 45_000;
 const REPAIR_TIMEOUT_MS = 15_000;
-const TOOL_LOOP_TOTAL_TIMEOUT_MS = 180_000;
+const STAGE_TOTAL_TIMEOUT_MS = 180_000;
+const MAX_SEARCH_CONTEXT_ITEMS = 12;
+const MAX_SEARCH_QUERIES_PER_STAGE = 4;
 const RESEARCH_INSTRUCTIONS =
-  "你是阿财项目的后端研究助手。必须使用结构化 JSON 输出，必须优先使用官方搜索工具检索公开网页来源，不得编造来源、股票代码或证据。若搜索结果来自非允许域名，只能作为弱参考，不能用于核心结论。";
+  "你是阿财项目的后端研究助手。Worker 已经通过 Kimi Formula web-search 显式检索公开网页来源，你必须基于 search_context 和工具返回内容推理，并输出结构化 JSON。不得编造来源、股票代码或证据。若搜索结果来自非允许域名，只能作为弱参考，不能用于核心结论。";
 
 type JsonSchema = {
   name: string;
@@ -41,34 +47,23 @@ type JsonSchema = {
 };
 
 type KimiMessage = {
-  role: "system" | "user" | "assistant" | "tool";
+  role: "system" | "user" | "assistant";
   content: string;
-  tool_calls?: KimiToolCall[];
-  tool_call_id?: string;
-  name?: string;
   reasoning_content?: string;
 };
 
-type KimiToolCall = {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-};
-
-type KimiToolDefinition = {
-  type: string;
-  function?: {
-    name: string;
-    description?: string;
-    parameters?: Record<string, unknown>;
-  };
-};
-
 type KimiFiberInvocationPayload = {
-  encrypted_output: string;
+  name: string;
+  arguments: string;
+};
+
+type KimiSearchBatch = {
+  queries: string[];
+  searchContextItems: SearchContextItem[];
+  toolMessages: KimiMessage[];
+  encryptedOutputCount: number;
+  failures: string[];
+  reusedPriorEvidence?: boolean;
 };
 
 class KimiProviderError extends Error {
@@ -323,6 +318,18 @@ function resolveBaseUrl(env: WorkerEnv): string {
   return (env.KIMI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
 }
 
+function resolveWebSearchFormula(env: WorkerEnv): string {
+  return (env.KIMI_WEB_SEARCH_FORMULA ?? DEFAULT_WEB_SEARCH_FORMULA).trim();
+}
+
+function buildFormulaToolsUrl(env: WorkerEnv): string {
+  return `${resolveBaseUrl(env)}/formulas/${resolveWebSearchFormula(env)}/tools`;
+}
+
+function buildFormulaFibersUrl(env: WorkerEnv): string {
+  return `${resolveBaseUrl(env)}/formulas/${resolveWebSearchFormula(env)}/fibers`;
+}
+
 function buildDomainInstructions(allowedSourceLevels: SourceLevel[]): string {
   const allowedDomains = getAllowedDomainsForLevels(allowedSourceLevels);
 
@@ -353,7 +360,7 @@ function buildSchemaConstrainedPrompt(prompt: string, schema: JsonSchema): strin
     "4. 数组字段必须输出数组，不能输出字符串或对象替代。",
     "5. round 必须是当前轮次整数；stage 必须是对应阶段常量；allowed_source_levels 必须是字符串数组。",
     `6. 顶层 required 字段: ${requiredFields}`,
-    "7. 在给出最终 JSON 前，必须至少调用一次 web_search 工具；没有调用 web_search 之前不得直接回答。",
+    "7. 只能基于给定的 search_context、候选摘要、证据摘要和常识性推理作答，不得编造未提供的来源。",
   ].join("\n");
 }
 
@@ -393,13 +400,18 @@ function logKimiStage(stageLabel: string, message: string, extra?: Record<string
 async function fetchOfficialTools(
   env: WorkerEnv,
   stageLabel: string,
-): Promise<KimiToolDefinition[]> {
+): Promise<{
+  type: string;
+  function?: {
+    name: string;
+  };
+}[]> {
   logKimiStage(stageLabel, "fetch_tools_start");
   const { response, payload } = await fetchJson<{
-    data?: KimiToolDefinition[];
-    tools?: KimiToolDefinition[];
+    data?: Array<{ type: string; function?: { name: string } }>;
+    tools?: Array<{ type: string; function?: { name: string } }>;
   }>(
-    OFFICIAL_TOOLS_URL,
+    buildFormulaToolsUrl(env),
     {
       method: "GET",
       headers: {
@@ -434,11 +446,11 @@ async function invokeOfficialFiber(
   stageLabel: string,
   toolName: string,
 ): Promise<Record<string, unknown>> {
-  logKimiStage(stageLabel, "fiber_call_start", {
+  logKimiStage(stageLabel, "search_start", {
     tool_name: toolName,
   });
   const { response, payload } = await fetchJson<Record<string, unknown>>(
-    OFFICIAL_FIBERS_URL,
+    buildFormulaFibersUrl(env),
     {
       method: "POST",
       headers: {
@@ -451,13 +463,17 @@ async function invokeOfficialFiber(
   );
 
   if (!response.ok) {
+    logKimiStage(stageLabel, "search_failure", {
+      tool_name: toolName,
+      status: response.status,
+    });
     throw new KimiProviderError(
       `kimi_invoke_fiber_failed:${response.status}:${JSON.stringify(payload)}`,
       response.status,
     );
   }
 
-  logKimiStage(stageLabel, "fiber_call_success", {
+  logKimiStage(stageLabel, "search_success", {
     tool_name: toolName,
   });
   return payload;
@@ -478,9 +494,6 @@ function extractAssistantMessage(payload: Record<string, unknown>): KimiMessage 
   return {
     role: "assistant",
     content: typeof typed.content === "string" ? typed.content : "",
-    tool_calls: Array.isArray(typed.tool_calls)
-      ? (typed.tool_calls as KimiToolCall[])
-      : undefined,
     reasoning_content:
       typeof typed.reasoning_content === "string" ? typed.reasoning_content : undefined,
   };
@@ -495,114 +508,312 @@ function extractJsonText(message: KimiMessage): string {
   return content;
 }
 
-async function runKimiToolLoop(
+function extractString(
+  source: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function extractSearchContextItemsFromUnknown(
+  query: string,
+  value: unknown,
+): SearchContextItem[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractSearchContextItemsFromUnknown(query, item));
+  }
+
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const record = value as Record<string, unknown>;
+  const nestedItems = [
+    ...extractSearchContextItemsFromUnknown(query, record.results),
+    ...extractSearchContextItemsFromUnknown(query, record.items),
+    ...extractSearchContextItemsFromUnknown(query, record.sources),
+    ...extractSearchContextItemsFromUnknown(query, record.output),
+    ...extractSearchContextItemsFromUnknown(query, record.data),
+    ...extractSearchContextItemsFromUnknown(query, record.context),
+  ];
+
+  const url = extractString(record, ["url", "link", "source_url"]);
+  const title = extractString(record, ["title", "name", "headline"]);
+  const sourceDomain = extractString(record, ["source_domain", "domain", "site", "hostname"]);
+  const sourceName = extractString(record, ["source_name", "site_name", "publisher", "source"]);
+  const snippet = extractString(record, ["snippet", "summary", "content", "text", "description"]);
+  const publishDate = extractString(record, ["publish_date", "published_at", "date", "time"]);
+
+  const maybeItem =
+    url || title || sourceDomain || sourceName || snippet
+      ? [
+          {
+            query,
+            source_level: inferSourceLevelForDomain(sourceDomain || url),
+            source_name: sourceName,
+            source_domain: sourceDomain,
+            title,
+            url,
+            publish_date: publishDate,
+            snippet,
+          } satisfies SearchContextItem,
+        ]
+      : [];
+
+  return [...maybeItem, ...nestedItems];
+}
+
+function dedupeSearchContextItems(items: SearchContextItem[]): SearchContextItem[] {
+  const byKey = new Map<string, SearchContextItem>();
+
+  for (const item of items) {
+    const key = `${item.query}::${item.url || item.title || item.source_domain || item.snippet}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, item);
+    }
+  }
+
+  return [...byKey.values()].slice(0, MAX_SEARCH_CONTEXT_ITEMS);
+}
+
+function collectEncryptedOutputCount(payload: unknown): number {
+  if (Array.isArray(payload)) {
+    return payload.reduce((count, item) => count + collectEncryptedOutputCount(item), 0);
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return 0;
+  }
+
+  const record = payload as Record<string, unknown>;
+  return Object.entries(record).reduce((count, [key, value]) => {
+    const extra = key === "encrypted_output" && typeof value === "string" ? 1 : 0;
+    return count + extra + collectEncryptedOutputCount(value);
+  }, 0);
+}
+
+function compactText(value: string, limit = 180): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, limit - 1)}…`;
+}
+
+function buildSiteQuery(seed: string, domains: string[]): string {
+  if (domains.length === 0) {
+    return seed;
+  }
+
+  return `${seed} (${domains.map((domain) => `site:${domain}`).join(" OR ")})`;
+}
+
+function buildCandidateNarrowingQueries(
+  request: AnalyzeRequest,
+  round: number,
+  allowedDomains: string[],
+): string[] {
+  const industryTerms = request.industry_preference.slice(0, 3);
+  const styleLabel = request.style_preference;
+  const cycleLabel = request.investment_cycle;
+  const baseSeeds = [
+    `中国A股 ${industryTerms.join(" ")} ${styleLabel} ${cycleLabel} 候选 公司 公告 年报`,
+    `中国A股 ${industryTerms.join(" ")} 分红 现金流 龙头 公司 ${cycleLabel}`,
+  ];
+
+  if (round >= 2) {
+    baseSeeds.push(`中国A股 ${industryTerms.join(" ")} 经营 韧性 公告 采访`);
+  }
+
+  if (round >= 3) {
+    baseSeeds.push(`中国A股 ${industryTerms.join(" ")} 景气度 行业 研判`);
+  }
+
+  if (round >= 4) {
+    baseSeeds.push(`中国A股 ${industryTerms.join(" ")} 投资者 讨论 风险 争议`);
+  }
+
+  return baseSeeds
+    .map((seed) => compactText(buildSiteQuery(seed.trim(), allowedDomains)))
+    .filter(Boolean)
+    .slice(0, MAX_SEARCH_QUERIES_PER_STAGE);
+}
+
+function buildEvidenceVerificationQueries(
+  candidateNarrowing: CandidateNarrowingOutput,
+  round: number,
+  allowedDomains: string[],
+): string[] {
+  const prioritizedCandidates = candidateNarrowing.candidate_pool.slice(0, 2);
+  const queries = prioritizedCandidates.flatMap((candidate) => {
+    const seeds = [`${candidate.stock_name} ${candidate.stock_code} 年报 公告 分红 现金流`];
+
+    if (round >= 2) {
+      seeds.push(`${candidate.stock_name} ${candidate.stock_code} 主营业务 业绩 公告`);
+    }
+    if (round >= 3) {
+      seeds.push(`${candidate.stock_name} ${candidate.stock_code} 行业 景气 研报`);
+    }
+    if (round >= 4) {
+      seeds.push(`${candidate.stock_name} ${candidate.stock_code} 风险 争议`);
+    }
+
+    return seeds.map((seed) => compactText(buildSiteQuery(seed, allowedDomains)));
+  });
+
+  return Array.from(new Set(queries)).slice(0, MAX_SEARCH_QUERIES_PER_STAGE);
+}
+
+function buildStructuredAssessmentQueries(
+  evidenceVerification: EvidenceVerificationOutput,
+  round: number,
+  allowedDomains: string[],
+): string[] {
+  const stillMissing = evidenceVerification.missing_evidence.slice(0, 3).join(" ");
+  if (!stillMissing && evidenceVerification.evidence_sufficient) {
+    return [];
+  }
+
+  const candidateNames = evidenceVerification.candidate_evaluations
+    .slice(0, 3)
+    .map((item) => `${item.stock_name} ${item.stock_code}`)
+    .join(" ");
+  const seeds = [
+    `${candidateNames} ${stillMissing || "补充 核心 证据"} 公告 年报`,
+  ];
+
+  if (round >= 3) {
+    seeds.push(`${candidateNames} ${stillMissing || "经营 风险"} 行业 研报`);
+  }
+
+  if (round >= 4) {
+    seeds.push(`${candidateNames} ${stillMissing || "市场 争议"} 社区 讨论`);
+  }
+
+  return seeds
+    .map((seed) => compactText(buildSiteQuery(seed, allowedDomains)))
+    .filter(Boolean)
+    .slice(0, MAX_SEARCH_QUERIES_PER_STAGE);
+}
+
+async function runKimiSearchBatch(
+  env: WorkerEnv,
+  queries: string[],
+  stageLabel: string,
+): Promise<KimiSearchBatch> {
+  const tools = await fetchOfficialTools(env, stageLabel);
+  if (!tools.some((tool) => tool.function?.name === WEB_SEARCH_TOOL_NAME)) {
+    throw new KimiProviderError("kimi_web_search_tool_unavailable");
+  }
+
+  const normalizedQueries = Array.from(new Set(queries.map((query) => query.trim()).filter(Boolean)))
+    .slice(0, MAX_SEARCH_QUERIES_PER_STAGE);
+  const toolMessages: KimiMessage[] = [];
+  const searchContextItems: SearchContextItem[] = [];
+  const failures: string[] = [];
+  let encryptedOutputCount = 0;
+
+  for (const query of normalizedQueries) {
+    try {
+      const toolPayload = await invokeOfficialFiber(
+        env,
+        {
+          name: WEB_SEARCH_TOOL_NAME,
+          arguments: JSON.stringify({ query }),
+        },
+        stageLabel,
+        WEB_SEARCH_TOOL_NAME,
+      );
+      encryptedOutputCount += collectEncryptedOutputCount(toolPayload);
+      searchContextItems.push(...extractSearchContextItemsFromUnknown(query, toolPayload));
+      if (toolMessages.length < 2) {
+        toolMessages.push({
+          role: "assistant",
+          content: [
+            `web_search query: ${query}`,
+            JSON.stringify(toolPayload).slice(0, 4000),
+          ].join("\n"),
+        });
+      }
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "unknown_kimi_search_error";
+      failures.push(`${query}: ${reason}`);
+    }
+  }
+
+  return {
+    queries: normalizedQueries,
+    searchContextItems: dedupeSearchContextItems(searchContextItems),
+    toolMessages,
+    encryptedOutputCount,
+    failures,
+  };
+}
+
+async function runKimiCompletion(
   env: WorkerEnv,
   prompt: string,
   allowedSourceLevels: SourceLevel[],
   stageLabel: string,
+  supportingMessages: KimiMessage[],
 ): Promise<string> {
-  const startedAt = Date.now();
-  const tools = await fetchOfficialTools(env, stageLabel);
-  let hasUsedTool = false;
-  const messages: KimiMessage[] = [
+  logKimiStage(stageLabel, "completion_start", {
+    message_count: supportingMessages.length + 2,
+  });
+  const { response, payload } = await fetchJson<Record<string, unknown>>(
+    `${resolveBaseUrl(env)}/chat/completions`,
     {
-      role: "system",
-      content: buildSystemMessage(allowedSourceLevels),
-    },
-    {
-      role: "user",
-      content: prompt,
-    },
-  ];
-
-  for (let step = 0; step < 6; step += 1) {
-    if (Date.now() - startedAt > TOOL_LOOP_TOTAL_TIMEOUT_MS) {
-      throw new KimiProviderError(
-        `kimi_tool_loop_timeout:${stageLabel}:${Date.now() - startedAt}`,
-      );
-    }
-
-    logKimiStage(stageLabel, "completion_start", {
-      step,
-      message_count: messages.length,
-    });
-    const { response, payload } = await fetchJson<Record<string, unknown>>(
-      `${resolveBaseUrl(env)}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${env.KIMI_API_KEY}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: env.KIMI_MODEL ?? DEFAULT_MODEL,
-          messages,
-          thinking: {
-            type: "enabled",
-          },
-          tools,
-          tool_choice: "auto",
-          response_format: {
-            type: "json_object",
-          },
-        }),
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.KIMI_API_KEY}`,
+        "content-type": "application/json",
       },
-      COMPLETION_TIMEOUT_MS,
+      body: JSON.stringify({
+        model: env.KIMI_MODEL ?? DEFAULT_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: buildSystemMessage(allowedSourceLevels),
+          },
+          ...supportingMessages,
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        thinking: {
+          type: "enabled",
+        },
+        response_format: {
+          type: "json_object",
+        },
+      }),
+    },
+    COMPLETION_TIMEOUT_MS,
+  );
+
+  if (!response.ok) {
+    throw new KimiProviderError(
+      `kimi_chat_completion_failed:${response.status}:${JSON.stringify(payload)}`,
+      response.status,
     );
-
-    if (!response.ok) {
-      throw new KimiProviderError(
-        `kimi_chat_completion_failed:${response.status}:${JSON.stringify(payload)}`,
-        response.status,
-      );
-    }
-
-    const assistantMessage = extractAssistantMessage(payload);
-    logKimiStage(stageLabel, "completion_success", {
-      step,
-      has_tool_calls: (assistantMessage.tool_calls?.length ?? 0) > 0,
-      tool_call_count: assistantMessage.tool_calls?.length ?? 0,
-      has_reasoning: Boolean(assistantMessage.reasoning_content),
-      content_length: assistantMessage.content.length,
-    });
-    messages.push(assistantMessage);
-
-    const toolCalls = assistantMessage.tool_calls ?? [];
-    if (toolCalls.length === 0) {
-      if (!hasUsedTool) {
-        logKimiStage(stageLabel, "completion_missing_required_tool", {
-          step,
-        });
-        messages.push({
-          role: "user",
-          content:
-            "你尚未调用 web_search。请先调用 web_search 至少一次，基于搜索结果再输出最终 JSON。",
-        });
-        continue;
-      }
-      logKimiStage(stageLabel, "completion_final_content", {
-        step,
-      });
-      return extractJsonText(assistantMessage);
-    }
-
-    hasUsedTool = true;
-    for (const toolCall of toolCalls) {
-      const encryptedOutput = safeParseEncryptedOutput(toolCall.function.arguments);
-      const toolPayload = await invokeOfficialFiber(env, {
-        encrypted_output: encryptedOutput,
-      }, stageLabel, toolCall.function.name);
-
-      messages.push({
-        role: "tool",
-        tool_call_id: toolCall.id,
-        name: toolCall.function.name,
-        content: JSON.stringify(toolPayload),
-      });
-    }
   }
 
-  throw new KimiProviderError("kimi_tool_loop_exhausted");
+  const assistantMessage = extractAssistantMessage(payload);
+  logKimiStage(stageLabel, "completion_success", {
+    has_reasoning: Boolean(assistantMessage.reasoning_content),
+    content_length: assistantMessage.content.length,
+  });
+  return extractJsonText(assistantMessage);
 }
 
 async function repairStructuredOutput<T>(
@@ -684,28 +895,6 @@ async function repairStructuredOutput<T>(
   return validator.parse(repairedParsed);
 }
 
-function safeParseEncryptedOutput(argumentsText: string): string {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(argumentsText);
-  } catch (error) {
-    throw new KimiProviderError(
-      `kimi_invalid_tool_arguments:${error instanceof Error ? error.message : "unknown_error"}`,
-    );
-  }
-
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    typeof (parsed as { encrypted_output?: unknown }).encrypted_output !== "string"
-  ) {
-    throw new KimiProviderError("kimi_missing_encrypted_output");
-  }
-
-  return (parsed as { encrypted_output: string }).encrypted_output;
-}
-
 async function parseStructuredResponse<T>(
   env: WorkerEnv,
   prompt: string,
@@ -713,12 +902,23 @@ async function parseStructuredResponse<T>(
   validator: z.ZodSchema<T>,
   allowedSourceLevels: SourceLevel[],
   stageLabel: string,
-): Promise<T> {
-  const outputText = await runKimiToolLoop(
+  searchBatch: KimiSearchBatch,
+): Promise<ProviderStageResult<T>> {
+  const startedAt = Date.now();
+  const searchContextBlock = buildSearchContextBlock(searchBatch.searchContextItems);
+  const outputText = await runKimiCompletion(
     env,
-    buildSchemaConstrainedPrompt(prompt, schema),
+    buildSchemaConstrainedPrompt(
+      [
+        prompt,
+        "",
+        searchContextBlock,
+      ].join("\n\n"),
+      schema,
+    ),
     allowedSourceLevels,
     stageLabel,
+    searchBatch.toolMessages,
   );
 
   let parsed: unknown;
@@ -729,24 +929,81 @@ async function parseStructuredResponse<T>(
       `kimi_invalid_json:${error instanceof Error ? error.message : "unknown_error"}`,
     );
   }
+  parsed = normalizeStagePayload(stageLabel, parsed);
 
   const validated = validator.safeParse(parsed);
   if (validated.success) {
     logKimiStage(stageLabel, "schema_validate_success");
-    return validated.data;
+    return {
+      output: validated.data,
+      trace: {
+        provider: "kimi",
+        completion_model: env.KIMI_MODEL ?? DEFAULT_MODEL,
+        search_queries: searchBatch.queries,
+        search_context_items: searchBatch.searchContextItems,
+        encrypted_output_count: searchBatch.encryptedOutputCount,
+        search_failures: searchBatch.failures.length > 0 ? searchBatch.failures : undefined,
+        reused_prior_evidence: searchBatch.reusedPriorEvidence,
+      },
+    };
+  }
+
+  const normalizedAgain = normalizeStagePayload(stageLabel, parsed);
+  const normalizedAgainValidated = validator.safeParse(normalizedAgain);
+  if (normalizedAgainValidated.success) {
+    logKimiStage(stageLabel, "schema_validate_success_after_normalize");
+    return {
+      output: normalizedAgainValidated.data,
+      trace: {
+        provider: "kimi",
+        completion_model: env.KIMI_MODEL ?? DEFAULT_MODEL,
+        search_queries: searchBatch.queries,
+        search_context_items: searchBatch.searchContextItems,
+        encrypted_output_count: searchBatch.encryptedOutputCount,
+        search_failures: searchBatch.failures.length > 0 ? searchBatch.failures : undefined,
+        reused_prior_evidence: searchBatch.reusedPriorEvidence,
+      },
+    };
   }
 
   logKimiStage(stageLabel, "schema_validate_failed", {
-    issue_count: validated.error.issues.length,
+    issue_count: normalizedAgainValidated.error.issues.length,
+    issues_preview: normalizedAgainValidated.error.issues.slice(0, 12).map((issue) => ({
+      path: issue.path.join("."),
+      message: issue.message,
+    })),
+    parsed_preview:
+      typeof normalizedAgain === "object" && normalizedAgain !== null
+        ? JSON.stringify(normalizedAgain).slice(0, 4000)
+        : String(normalizedAgain).slice(0, 4000),
   });
-  return repairStructuredOutput(
+  const repaired = await repairStructuredOutput(
     env,
     schema,
     validator,
-    parsed,
-    validated.error,
+    normalizedAgain,
+    normalizedAgainValidated.error,
     stageLabel,
   );
+
+  if (Date.now() - startedAt > STAGE_TOTAL_TIMEOUT_MS) {
+    throw new KimiProviderError(
+      `kimi_stage_timeout:${stageLabel}:${Date.now() - startedAt}`,
+    );
+  }
+
+  return {
+    output: repaired,
+    trace: {
+      provider: "kimi",
+      completion_model: env.KIMI_MODEL ?? DEFAULT_MODEL,
+      search_queries: searchBatch.queries,
+      search_context_items: searchBatch.searchContextItems,
+      encrypted_output_count: searchBatch.encryptedOutputCount,
+      search_failures: searchBatch.failures.length > 0 ? searchBatch.failures : undefined,
+      reused_prior_evidence: searchBatch.reusedPriorEvidence,
+    },
+  };
 }
 
 function candidateSnapshot(candidateNarrowing: CandidateNarrowingOutput): string {
@@ -768,26 +1025,278 @@ function evidenceSnapshot(evidenceVerification: EvidenceVerificationOutput): str
   );
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pickFirstString(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function pickStringArray(record: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      return value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      return [value.trim()];
+    }
+  }
+
+  return [];
+}
+
+function normalizeStageValue(value: unknown, expectedStage: string): string {
+  if (typeof value !== "string") {
+    return expectedStage;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === "narrowing") {
+    return "candidate_narrowing";
+  }
+  if (normalized === "evidence" || normalized === "verification") {
+    return "evidence_verification";
+  }
+  if (
+    normalized === "assessment" ||
+    normalized === "structured" ||
+    normalized === "initial_assessment" ||
+    normalized === "final_assessment"
+  ) {
+    return "structured_assessment";
+  }
+
+  return normalized || expectedStage;
+}
+
+function normalizeStockCodeValue(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const digits = value.replace(/[^0-9]/g, "");
+  return digits.length >= 6 ? digits.slice(0, 6) : value.trim();
+}
+
+function normalizeCandidateNarrowingPayload(payload: unknown): unknown {
+  const record = asRecord(payload);
+  if (!record) {
+    return payload;
+  }
+
+  return {
+    ...record,
+    stage: normalizeStageValue(record.stage, "candidate_narrowing"),
+    candidate_pool: Array.isArray(record.candidate_pool)
+      ? record.candidate_pool.slice(0, 12).map((item) => {
+          const candidate = asRecord(item);
+          if (!candidate) {
+            return item;
+          }
+
+          return {
+            stock_name: pickFirstString(candidate, ["stock_name", "name"]),
+            stock_code: normalizeStockCodeValue(candidate.stock_code ?? candidate.code),
+            industry: pickFirstString(candidate, ["industry", "sector"]),
+            selection_thesis: pickFirstString(candidate, ["selection_thesis", "reason", "selection_reason"]),
+            preliminary_match_points:
+              pickStringArray(candidate, ["preliminary_match_points", "match_points"]).slice(0, 5),
+          };
+        })
+      : [],
+    excluded_candidates: Array.isArray(record.excluded_candidates)
+      ? record.excluded_candidates.map((item) => {
+          const candidate = asRecord(item);
+          if (!candidate) {
+            return item;
+          }
+
+          return {
+            name: pickFirstString(candidate, ["name", "stock_name"]),
+            reason: pickFirstString(candidate, ["reason"]),
+          };
+        })
+      : [],
+    search_notes: pickStringArray(record, ["search_notes", "notes"]).slice(0, 5),
+  };
+}
+
+function normalizeEvidenceVerificationPayload(payload: unknown): unknown {
+  const record = asRecord(payload);
+  if (!record) {
+    return payload;
+  }
+
+  return {
+    ...record,
+    stage: normalizeStageValue(record.stage, "evidence_verification"),
+    candidate_evaluations: Array.isArray(record.candidate_evaluations)
+      ? record.candidate_evaluations.map((item) => {
+          const evaluation = asRecord(item);
+          if (!evaluation) {
+            return item;
+          }
+
+          return {
+            stock_name: pickFirstString(evaluation, ["stock_name", "name"]),
+            stock_code: normalizeStockCodeValue(evaluation.stock_code ?? evaluation.code),
+            is_qualified_in_current_round:
+              typeof evaluation.is_qualified_in_current_round === "boolean"
+                ? evaluation.is_qualified_in_current_round
+                : Boolean(evaluation.is_qualified ?? evaluation.qualified),
+            source_level_coverage: pickStringArray(evaluation, ["source_level_coverage", "covered_levels"]).map((item) =>
+              item.toUpperCase(),
+            ),
+            evidence_items: Array.isArray(evaluation.evidence_items)
+              ? evaluation.evidence_items.map((evidence) => {
+                  const entry = asRecord(evidence);
+                  if (!entry) {
+                    return evidence;
+                  }
+
+                  return {
+                    source_level: pickFirstString(entry, ["source_level", "level"]).toUpperCase() || "L3",
+                    source_name: pickFirstString(entry, ["source_name", "site_name", "source"]),
+                    source_domain: pickFirstString(entry, ["source_domain", "domain", "site"]),
+                    title: pickFirstString(entry, ["title", "headline"]),
+                    url: pickFirstString(entry, ["url", "link"]),
+                    publish_date: pickFirstString(entry, ["publish_date", "date", "published_at"]),
+                    snippet: pickFirstString(entry, ["snippet", "summary", "content"]),
+                    supports_core_conclusion:
+                      typeof entry.supports_core_conclusion === "boolean"
+                        ? entry.supports_core_conclusion
+                        : Boolean(entry.is_core || entry.core),
+                  };
+                })
+              : [],
+            missing_evidence: pickStringArray(evaluation, ["missing_evidence"]),
+            disqualify_reasons: pickStringArray(evaluation, ["disqualify_reasons", "reasons"]),
+          };
+        })
+      : [],
+    missing_evidence: pickStringArray(record, ["missing_evidence"]),
+  };
+}
+
+function normalizeStructuredAssessmentPayload(payload: unknown): unknown {
+  const record = asRecord(payload);
+  if (!record) {
+    return payload;
+  }
+
+  let proposedStatus = pickFirstString(record, ["proposed_status", "status"]).toUpperCase();
+  if (proposedStatus === "HAS_CANDIDATE") {
+    proposedStatus = "HAS_CANDIDATES";
+  }
+  if (proposedStatus === "NO_CANDIDATE") {
+    proposedStatus = "NO_CLEAR_CANDIDATES";
+  }
+
+  return {
+    ...record,
+    stage: normalizeStageValue(record.stage, "structured_assessment"),
+    proposed_status: proposedStatus || "NO_CLEAR_CANDIDATES",
+    qualified_candidates: Array.isArray(record.qualified_candidates)
+      ? record.qualified_candidates.map((item) => {
+          const candidate = asRecord(item);
+          if (!candidate) {
+            return item;
+          }
+
+          return {
+            stock_name: pickFirstString(candidate, ["stock_name", "name"]),
+            stock_code: normalizeStockCodeValue(candidate.stock_code ?? candidate.code),
+            industry: pickFirstString(candidate, ["industry", "sector"]),
+            selection_reason: pickFirstString(candidate, ["selection_reason", "reason"]),
+            evidence_summary: pickFirstString(candidate, ["evidence_summary", "summary"]),
+            major_risks: pickFirstString(candidate, ["major_risks", "risk"]),
+            uncertainties: pickFirstString(candidate, ["uncertainties", "uncertainty"]),
+            confidence_level: pickFirstString(candidate, ["confidence_level"]).toUpperCase() || "MEDIUM",
+            confidence_score:
+              typeof candidate.confidence_score === "number"
+                ? candidate.confidence_score
+                : typeof candidate.score === "number"
+                  ? candidate.score
+                  : 60,
+          };
+        })
+      : [],
+    rejected_candidates: Array.isArray(record.rejected_candidates)
+      ? record.rejected_candidates.map((item) => {
+          const candidate = asRecord(item);
+          if (!candidate) {
+            return item;
+          }
+
+          return {
+            stock_name: pickFirstString(candidate, ["stock_name", "name"]),
+            stock_code: normalizeStockCodeValue(candidate.stock_code ?? candidate.code),
+            reason: pickFirstString(candidate, ["reason"]),
+          };
+        })
+      : [],
+    reasons: pickStringArray(record, ["reasons"]),
+    suggestions: pickStringArray(record, ["suggestions"]),
+    missing_evidence: pickStringArray(record, ["missing_evidence"]),
+  };
+}
+
+function normalizeStagePayload<T>(stageLabel: string, payload: T): T {
+  if (stageLabel.startsWith("candidate_narrowing:")) {
+    return normalizeCandidateNarrowingPayload(payload) as T;
+  }
+  if (stageLabel.startsWith("evidence_verification:")) {
+    return normalizeEvidenceVerificationPayload(payload) as T;
+  }
+  if (stageLabel.startsWith("structured_assessment:")) {
+    return normalizeStructuredAssessmentPayload(payload) as T;
+  }
+
+  return payload;
+}
+
 export function createKimiResponsesProvider(env: WorkerEnv): ResponsesProvider {
   return {
     async runCandidateNarrowing({
       request,
       round,
       allowedSourceLevels,
-    }): Promise<CandidateNarrowingOutput> {
+    }) {
       const stageLabel = `candidate_narrowing:r${round}`;
+      const allowedDomains = getAllowedDomainsForLevels(allowedSourceLevels);
+      const searchBatch = await runKimiSearchBatch(
+        env,
+        buildCandidateNarrowingQueries(request, round, allowedDomains),
+        stageLabel,
+      );
       return parseStructuredResponse(
         env,
         buildCandidateNarrowingPrompt(
           request,
           round,
           allowedSourceLevels,
-          getAllowedDomainsForLevels(allowedSourceLevels),
+          allowedDomains,
         ),
         candidateNarrowingJsonSchema,
         CandidateNarrowingSchema,
         allowedSourceLevels,
         stageLabel,
+        searchBatch,
       );
     },
 
@@ -796,21 +1305,28 @@ export function createKimiResponsesProvider(env: WorkerEnv): ResponsesProvider {
       round,
       allowedSourceLevels,
       candidateNarrowing,
-    }): Promise<EvidenceVerificationOutput> {
+    }) {
       const stageLabel = `evidence_verification:r${round}`;
+      const allowedDomains = getAllowedDomainsForLevels(allowedSourceLevels);
+      const searchBatch = await runKimiSearchBatch(
+        env,
+        buildEvidenceVerificationQueries(candidateNarrowing, round, allowedDomains),
+        stageLabel,
+      );
       return parseStructuredResponse(
         env,
         buildEvidenceVerificationPrompt(
           request,
           round,
           allowedSourceLevels,
-          getAllowedDomainsForLevels(allowedSourceLevels),
+          allowedDomains,
           candidateSnapshot(candidateNarrowing),
         ),
         evidenceVerificationJsonSchema,
         EvidenceVerificationSchema,
         allowedSourceLevels,
         stageLabel,
+        searchBatch,
       );
     },
 
@@ -820,15 +1336,45 @@ export function createKimiResponsesProvider(env: WorkerEnv): ResponsesProvider {
       allowedSourceLevels,
       candidateNarrowing,
       evidenceVerification,
-    }): Promise<StructuredAssessmentOutput> {
+    }) {
       const stageLabel = `structured_assessment:r${round}`;
+      const allowedDomains = getAllowedDomainsForLevels(allowedSourceLevels);
+      const needsFreshSearch =
+        !evidenceVerification.evidence_sufficient || evidenceVerification.missing_evidence.length > 0;
+      const searchBatch = needsFreshSearch
+        ? await runKimiSearchBatch(
+            env,
+            buildStructuredAssessmentQueries(evidenceVerification, round, allowedDomains),
+            stageLabel,
+          )
+        : {
+            queries: [],
+            searchContextItems: dedupeSearchContextItems(
+              evidenceVerification.candidate_evaluations.flatMap((evaluation) =>
+                evaluation.evidence_items.map((item) => ({
+                  query: `${evaluation.stock_name} ${evaluation.stock_code} 已核验证据`,
+                  source_level: item.source_level,
+                  source_name: item.source_name,
+                  source_domain: item.source_domain,
+                  title: item.title,
+                  url: item.url,
+                  publish_date: item.publish_date,
+                  snippet: item.snippet,
+                })),
+              ),
+            ),
+            toolMessages: [],
+            encryptedOutputCount: 0,
+            failures: [],
+            reusedPriorEvidence: true,
+          };
       return parseStructuredResponse(
         env,
         buildStructuredAssessmentPrompt(
           request,
           round,
           allowedSourceLevels,
-          getAllowedDomainsForLevels(allowedSourceLevels),
+          allowedDomains,
           candidateSnapshot(candidateNarrowing),
           evidenceSnapshot(evidenceVerification),
         ),
@@ -836,6 +1382,7 @@ export function createKimiResponsesProvider(env: WorkerEnv): ResponsesProvider {
         StructuredAssessmentSchema,
         allowedSourceLevels,
         stageLabel,
+        searchBatch,
       );
     },
   };

@@ -19,26 +19,29 @@ export async function runResponsesPipeline(
   const roundTrace: RoundTraceEntry[] = [];
 
   for (const roundConfig of responseRounds) {
-    const candidateNarrowing = await provider.runCandidateNarrowing({
+    const candidateNarrowingResult = await provider.runCandidateNarrowing({
       request,
       round: roundConfig.round,
       allowedSourceLevels: roundConfig.allowedSourceLevels,
     });
+    const candidateNarrowing = candidateNarrowingResult.output;
 
-    const evidenceVerification = await provider.runEvidenceVerification({
+    const evidenceVerificationResult = await provider.runEvidenceVerification({
       request,
       round: roundConfig.round,
       allowedSourceLevels: roundConfig.allowedSourceLevels,
       candidateNarrowing,
     });
+    const evidenceVerification = evidenceVerificationResult.output;
 
-    const structuredAssessment = await provider.runStructuredAssessment({
+    const structuredAssessmentResult = await provider.runStructuredAssessment({
       request,
       round: roundConfig.round,
       allowedSourceLevels: roundConfig.allowedSourceLevels,
       candidateNarrowing,
       evidenceVerification,
     });
+    const structuredAssessment = structuredAssessmentResult.output;
 
     const roundEntry: RoundTraceEntry = {
       round: roundConfig.round,
@@ -47,6 +50,15 @@ export async function runResponsesPipeline(
       evidence_verification: evidenceVerification,
       structured_assessment: structuredAssessment,
     };
+    const stageTraces = {
+      candidate_narrowing: candidateNarrowingResult.trace,
+      evidence_verification: evidenceVerificationResult.trace,
+      structured_assessment: structuredAssessmentResult.trace,
+    };
+
+    if (Object.values(stageTraces).some(Boolean)) {
+      roundEntry.stage_traces = stageTraces;
+    }
 
     const gatekeeperResult = applyEvidenceGatekeeper(roundEntry);
     roundEntry.gatekeeper = {

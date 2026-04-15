@@ -1,4 +1,5 @@
 import type { AnalyzeRequest, SourceLevel } from "@acai/shared";
+import type { SearchContextItem } from "./types";
 
 function buildRequestSummary(request: AnalyzeRequest): string {
   return [
@@ -21,6 +22,28 @@ function buildPolicyBlock(allowedSourceLevels: SourceLevel[], allowedDomains: st
     "如果当前轮次证据不足，应明确返回缺失项并决定是否升级到下一轮。",
     "股票代码必须是中国 A 股常见代码格式。",
   ].join("\n");
+}
+
+export function buildSearchContextBlock(searchContextItems: SearchContextItem[]): string {
+  if (searchContextItems.length === 0) {
+    return "search_context: []";
+  }
+
+  return [
+    "search_context:",
+    ...searchContextItems.map((item, index) =>
+      [
+        `${index + 1}. query: ${item.query}`,
+        `source_level: ${item.source_level ?? "UNKNOWN"}`,
+        `source_name: ${item.source_name || "未知来源"}`,
+        `source_domain: ${item.source_domain || "未知域名"}`,
+        `title: ${item.title || "无标题"}`,
+        `url: ${item.url || "无链接"}`,
+        `publish_date: ${item.publish_date || "未知"}`,
+        `snippet: ${item.snippet || "无摘要"}`,
+      ].join("\n"),
+    ),
+  ].join("\n\n");
 }
 
 export function buildCandidateNarrowingPrompt(

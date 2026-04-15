@@ -109,17 +109,45 @@ export type ResponseStageInput = {
   allowedSourceLevels: SourceLevel[];
 };
 
+export type SearchContextItem = {
+  query: string;
+  source_level: SourceLevel | null;
+  source_name: string;
+  source_domain: string;
+  title: string;
+  url: string;
+  publish_date: string;
+  snippet: string;
+};
+
+export type ResponseStageTrace = {
+  provider: "mock" | "openai" | "kimi";
+  completion_model?: string;
+  search_queries?: string[];
+  search_context_items?: SearchContextItem[];
+  encrypted_output_count?: number;
+  search_failures?: string[];
+  reused_prior_evidence?: boolean;
+};
+
+export type ProviderStageResult<T> = {
+  output: T;
+  trace?: ResponseStageTrace;
+};
+
 export type ResponsesProvider = {
-  runCandidateNarrowing(input: ResponseStageInput): Promise<CandidateNarrowingOutput>;
+  runCandidateNarrowing(
+    input: ResponseStageInput,
+  ): Promise<ProviderStageResult<CandidateNarrowingOutput>>;
   runEvidenceVerification(
     input: ResponseStageInput & { candidateNarrowing: CandidateNarrowingOutput },
-  ): Promise<EvidenceVerificationOutput>;
+  ): Promise<ProviderStageResult<EvidenceVerificationOutput>>;
   runStructuredAssessment(
     input: ResponseStageInput & {
       candidateNarrowing: CandidateNarrowingOutput;
       evidenceVerification: EvidenceVerificationOutput;
     },
-  ): Promise<StructuredAssessmentOutput>;
+  ): Promise<ProviderStageResult<StructuredAssessmentOutput>>;
 };
 
 export type RoundTraceEntry = {
@@ -137,6 +165,11 @@ export type RoundTraceEntry = {
       stock_code: string;
       reason: string;
     }>;
+  };
+  stage_traces?: {
+    candidate_narrowing?: ResponseStageTrace;
+    evidence_verification?: ResponseStageTrace;
+    structured_assessment?: ResponseStageTrace;
   };
 };
 

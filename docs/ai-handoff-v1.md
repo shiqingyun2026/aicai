@@ -4,7 +4,7 @@
 
 状态：可继续开发
 
-更新时间：2026-04-14
+更新时间：2026-04-15
 
 ## 1. 交接目的
 
@@ -123,7 +123,7 @@
 
 ### 5.4 Responses Pipeline 现状
 
-这里是“真实 provider 已接线，但还没完成真实 API 联调”的状态。
+这里是“真实 provider 已接线，Kimi 已切到 Worker 显式搜索前置，但还没完成真实 API 联调验收”的状态。
 
 已落地内容：
 
@@ -135,16 +135,19 @@
 - Orchestrator
 - mock provider
 - OpenAI Responses provider 接线与 provider 选择层
+- Kimi provider 已重构为 Worker 显式调用 Formula web-search，再将 `search_context` 注入 `kimi-k2.5`
 - 分阶段 prompt 模板
 - 基于来源等级的域名 allowlist 映射
 - Worker 侧证据标准化、按链接去重与有效性过滤
 - Evidence Gatekeeper 已接入主流程，会对候选做来源等级、域名、核心证据数量和置信度匹配校验
 - Round 4 已补充 `L4` 仅可做背景补充、不得支撑核心结论的后置仲裁逻辑
 - 根据证据结果决定升级轮次或收敛结果
+- round trace 已可记录 provider 级阶段 trace，包括搜索 query、提取到的 `search_context`、搜索失败摘要和是否复用前序证据
 
 未落地内容：
 
 - 用真实 `OPENAI_API_KEY` 验证 OpenAI Responses API 调用链路
+- 用真实 `KIMI_API_KEY` 验证 Formula `web-search` 调用链路与三阶段输出稳定性
 - 基于真实 `web_search` 返回结果复核来源域名白名单与等级过滤覆盖度
 - Round 4 背景信息在最终结果中的单独承载方式仍未细化
 
@@ -226,9 +229,9 @@
 
 这部分是下一位接手者最需要知道的真实风险。
 
-### 8.1 模型链路仍是假实现
+### 8.1 模型链路仍缺真实联调验收
 
-虽然 Responses Pipeline 已经补上真实 OpenAI provider 接线，但当前还没有用真实 `OPENAI_API_KEY` 跑过联调验证。
+虽然 Responses Pipeline 已经补上真实 OpenAI provider 接线，Kimi 也已经切换到显式搜索前置的新路径，但当前还没有用真实 `OPENAI_API_KEY` 或真实 `KIMI_API_KEY` 跑过完整联调验证。
 
 这意味着：
 

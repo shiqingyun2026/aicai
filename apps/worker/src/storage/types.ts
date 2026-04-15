@@ -11,6 +11,7 @@ export type WorkerEnv = {
   KIMI_API_KEY?: string;
   KIMI_BASE_URL?: string;
   KIMI_MODEL?: string;
+  KIMI_WEB_SEARCH_FORMULA?: string;
   RESPONSES_PROVIDER?: string;
   SUPABASE_CONNECTION_STRING?: string;
   SOURCE_CHANNEL?: string;
