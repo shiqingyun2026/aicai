@@ -38,10 +38,12 @@ supabase/   数据库 migration
 - 当前 `/api/v1/analyze` 已接入本地规则判断、分轮编排骨架和三张分析表写库入口
 - 如果未配置 `SUPABASE_CONNECTION_STRING` 或 Hyperdrive 绑定，Worker 会跳过数据库写入，仅保留接口响应
 - 配置好 `SUPABASE_CONNECTION_STRING` 后，可执行 `npm run db:smoke --workspace @acai/worker` 验证 migration 与四张分析表写入链路
+- 做真实 OpenAI 联调时，在 `apps/worker/.dev.vars` 中填写 `OPENAI_API_KEY`，并将 `RESPONSES_PROVIDER=openai`
+- 做真实 Kimi 联调时，在 `apps/worker/.dev.vars` 中填写 `KIMI_API_KEY`，并将 `RESPONSES_PROVIDER=kimi`
 
 ## 下一步建议
 
 1. 把 `packages/shared` 里的契约继续补齐为完整 Zod schema
 2. 验证 `supabase/migrations/20260413_230000_analysis_schema.sql`
-3. 把 `apps/worker/src/responses/providers/mockProvider.ts` 替换成真实 OpenAI Responses provider
+3. 基于真实 `OPENAI_API_KEY` 跑通 `web_search` 联调并沉淀冒烟样例
 4. 为分轮编排补充 schema 校验、上游异常处理和测试

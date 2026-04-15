@@ -251,3 +251,25 @@ export async function persistAnalysisBundle(
 
   return result === true;
 }
+
+export async function persistFailedAnalysisRecord(
+  env: WorkerEnv,
+  input: PersistAnalysisRecordInput,
+): Promise<boolean> {
+  const result = await withDatabaseClient(env, async (client) => {
+    await client.query("begin");
+
+    try {
+      await upsertClientSession(client, input.clientSessionId, env);
+      await insertAnalysisRecord(client, input);
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    }
+
+    return true;
+  });
+
+  return result === true;
+}

@@ -185,11 +185,11 @@
 | `RESP-04` | 建立 Round 1 调用逻辑 | 已完成 | 已由 orchestrator + provider 第一版承载 |
 | `RESP-05` | 建立 Round 2 调用逻辑 | 已完成 | 已由 orchestrator + provider 第一版承载 |
 | `RESP-06` | 建立 Round 3 调用逻辑 | 已完成 | 已由 orchestrator + provider 第一版承载 |
-| `RESP-07` | 建立 Round 4 背景补充逻辑 | 未开始 | 当前只有 round 配置，没有“仅补背景不参与核心结论”的专门实现 |
-| `RESP-08` | 建立轮次升级规则控制 | 进行中 | 已有 `should_escalate_to_next_round`，但逻辑仍较简化 |
-| `RESP-09` | 建立来源等级过滤 | 进行中 | 当前只有 `allowedSourceLevels` 结构传递，没有真实域名策略与级别映射校验 |
-| `RESP-10` | 建立证据去重与标准化 | 未开始 | 待实现 |
-| `RESP-11` | 建立 Evidence Gatekeeper | 未开始 | 待实现 |
+| `RESP-07` | 建立 Round 4 背景补充逻辑 | 进行中 | Worker gatekeeper 已强制 `Round 4 / L4` 证据不得参与核心结论，但“背景补充内容单独出区”的结果组织仍未细化 |
+| `RESP-08` | 建立轮次升级规则控制 | 进行中 | 已由 Worker 结合 schema 输出和 gatekeeper 结果决定是否升级，但真实 OpenAI 联调后仍需复核边界 |
+| `RESP-09` | 建立来源等级过滤 | 进行中 | 已补域名白名单与来源等级的 Worker 后置校验，仍需结合真实 `web_search` 返回结果验证覆盖度 |
+| `RESP-10` | 建立证据去重与标准化 | 已完成 | 已在 Worker gatekeeper 中实现证据域名标准化、按链接去重和有效性过滤 |
+| `RESP-11` | 建立 Evidence Gatekeeper | 已完成 | 已在 orchestrator 中接入 Worker 后置仲裁，负责证据门槛、置信度匹配和候选放行/剔除 |
 | `RESP-12` | 建立 Prompt 模板和调用参数组织 | 进行中 | 已补三阶段 prompt 模板、JSON Schema 请求组织与来源域名过滤参数 |
 | `RESP-13` | 接入真实 OpenAI Responses provider | 进行中 | 已完成 provider 接线与 mock 回退，待真实 `OPENAI_API_KEY` 联调验证 |
 
@@ -203,7 +203,7 @@
 | `DATA-04` | 建立 `analysis_records` 写入 | 已完成 | 已通过真实库 smoke 验证记录写入 |
 | `DATA-05` | 建立 `analysis_candidates` 写入 | 已完成 | 已通过真实库 smoke 验证候选写入 |
 | `DATA-06` | 建立 `candidate_evidence` 写入 | 已完成 | 已通过真实库 smoke 验证证据写入 |
-| `DATA-07` | 建立失败路径记录 | 未开始 | 当前仅成功路径入库 |
+| `DATA-07` | 建立失败路径记录 | 进行中 | 已补上游模型失败和请求校验失败场景的 `analysis_records` 落库，仍未覆盖存储失败自身的留痕 |
 | `DATA-08` | 建立请求与响应回放字段映射 | 已完成 | `normalized_request_json`、`rule_results_json`、`round_trace_json`、`final_response_json` 已接通 |
 
 ## 4.6 前端工程与页面开发

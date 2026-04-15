@@ -137,14 +137,16 @@
 - OpenAI Responses provider 接线与 provider 选择层
 - 分阶段 prompt 模板
 - 基于来源等级的域名 allowlist 映射
+- Worker 侧证据标准化、按链接去重与有效性过滤
+- Evidence Gatekeeper 已接入主流程，会对候选做来源等级、域名、核心证据数量和置信度匹配校验
+- Round 4 已补充 `L4` 仅可做背景补充、不得支撑核心结论的后置仲裁逻辑
 - 根据证据结果决定升级轮次或收敛结果
 
 未落地内容：
 
 - 用真实 `OPENAI_API_KEY` 验证 OpenAI Responses API 调用链路
-- 来源域名白名单与等级过滤的真实实现
-- 证据去重与 gatekeeper
-- Round 4 的“仅补背景不参与核心结论”专门逻辑
+- 基于真实 `web_search` 返回结果复核来源域名白名单与等级过滤覆盖度
+- Round 4 背景信息在最终结果中的单独承载方式仍未细化
 
 ### 5.5 数据库存储链路
 
@@ -161,7 +163,7 @@
 但要注意：
 
 - Hyperdrive 只是预留配置，还没完成 Cloudflare 侧绑定
-- 当前没有失败路径写库
+- 已补上游模型失败和请求校验失败场景的 `analysis_records` 失败留痕，但还没有覆盖所有失败阶段
 
 ### 5.6 前端页面现状
 
@@ -232,7 +234,7 @@
 
 - 当前默认仍可能回退到 mock provider
 - OpenAI `web_search` 实际调用还没有真实联调记录
-- 来源等级控制还是第一版 allowlist，不是生产可信实现
+- 虽然 Worker 已补 gatekeeper、去重和域名校验，但对真实搜索返回结果的覆盖度还没验证
 
 ### 8.2 数据库链路已接线并完成首轮真实验证
 
@@ -244,7 +246,7 @@
 但仍有这些边界未完成：
 
 - Hyperdrive 还没有完成 Cloudflare 侧绑定
-- 失败路径写库还没实现
+- 存储自身失败场景还没有完整留痕
 
 ### 8.3 前端仍在从开发态向可演示版本过渡
 
@@ -274,11 +276,10 @@
    - 填入 `OPENAI_API_KEY`
    - 用真实请求跑通 OpenAI Responses API + `web_search`
    - 校验三段 Structured Outputs 都能稳定返回
-2. 然后补证据与来源门槛
-   - 来源等级映射
-   - 证据去重
-   - gatekeeper
-   - Round 4 背景补充边界
+   - 复核真实搜索返回的来源域名是否都能被当前 gatekeeper 正确识别
+2. 然后补 Round 4 与结果细化
+   - 背景补充信息如何进入最终结果
+   - 是否需要把 gatekeeper 拒绝原因进一步结构化暴露
 3. 再补前端产品化
    - 继续打磨正式文案与移动端体验
    - 系统异常页与异常流转

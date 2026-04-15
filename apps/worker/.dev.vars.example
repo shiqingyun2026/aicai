@@ -4,6 +4,10 @@
 # postgresql://postgres.uxdrlytwgfyahmggvmah:<DB_PASSWORD>@aws-1-us-east-2.pooler.supabase.com:5432/postgres
 # 配置完成后可运行: npm run db:smoke --workspace @acai/worker
 OPENAI_API_KEY=
+KIMI_API_KEY=
+KIMI_BASE_URL=https://api.moonshot.cn/v1
+KIMI_MODEL=kimi-k2.5
+RESPONSES_PROVIDER=auto
 OPENAI_RESPONSES_MODEL=gpt-5
 SUPABASE_CONNECTION_STRING=
 HYPERDRIVE_ID=

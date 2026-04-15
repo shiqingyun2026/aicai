@@ -25,6 +25,11 @@ import {
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-5";
+const DEFAULT_WEB_SEARCH_LOCATION = {
+  type: "approximate" as const,
+  country: "CN",
+  timezone: "Asia/Shanghai",
+};
 
 type JsonSchema = {
   name: string;
@@ -285,7 +290,7 @@ function buildRequestBody(
   schema: JsonSchema,
   allowedSourceLevels: SourceLevel[],
 ): RequestInit {
-  const allowedDomains = getAllowedDomainsForLevels(allowedSourceLevels);
+  const allowedDomains = getAllowedDomainsForLevels(allowedSourceLevels).slice(0, 100);
 
   return {
     method: "POST",
@@ -304,13 +309,14 @@ function buildRequestBody(
       tools: [
         {
           type: "web_search",
+          external_web_access: true,
           filters: {
             allowed_domains: allowedDomains,
           },
-          search_context_size: allowedSourceLevels.includes("L4") ? "high" : "medium",
+          user_location: DEFAULT_WEB_SEARCH_LOCATION,
         },
       ],
-      tool_choice: "auto",
+      tool_choice: "required",
       include: ["web_search_call.action.sources"],
       text: {
         format: {

@@ -128,6 +128,16 @@ export type RoundTraceEntry = {
   candidate_narrowing: CandidateNarrowingOutput;
   evidence_verification: EvidenceVerificationOutput;
   structured_assessment: StructuredAssessmentOutput;
+  gatekeeper?: {
+    evidence_sufficient: boolean;
+    should_escalate_to_next_round: boolean;
+    missing_evidence: string[];
+    rejected_candidates: Array<{
+      stock_name: string;
+      stock_code: string;
+      reason: string;
+    }>;
+  };
 };
 
 export type ResponsesPipelineResult = {
@@ -143,4 +153,3 @@ export type ResponsesPipelineResult = {
     rounds: RoundTraceEntry[];
   };
 };
-

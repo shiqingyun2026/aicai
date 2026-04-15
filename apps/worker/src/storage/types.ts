@@ -8,6 +8,10 @@ export type WorkerEnv = {
   HYPERDRIVE?: HyperdriveBinding;
   OPENAI_API_KEY?: string;
   OPENAI_RESPONSES_MODEL?: string;
+  KIMI_API_KEY?: string;
+  KIMI_BASE_URL?: string;
+  KIMI_MODEL?: string;
+  RESPONSES_PROVIDER?: string;
   SUPABASE_CONNECTION_STRING?: string;
   SOURCE_CHANNEL?: string;
 };
@@ -17,8 +21,8 @@ export type PersistAnalysisRecordInput = {
   requestId: string;
   clientSessionId: string;
   processingState: "completed" | "failed" | "received";
-  statusCode: string;
-  statusLabel: string;
+  statusCode: string | null;
+  statusLabel: string | null;
   rulesPassed: boolean;
   ruleStatusCode: string;
   normalizedRequest: AnalyzeRequest;
